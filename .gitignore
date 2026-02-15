@@ -1,0 +1,38 @@
+# Output Files
+Output/*.wav
+Output/*.mp3
+
+# Temporary Files
+*.tmp
+*.temp
+~$*
+
+# Windows
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# PowerShell
+*.ps1~
+*.psm1~
+
+# Logs
+*.log
+
+# Personal/Private Data
+private/
+confidential/
+test_data/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Git
+.git/
+
+# Keep Output directory structure but ignore contents
+!Output/.gitkeep

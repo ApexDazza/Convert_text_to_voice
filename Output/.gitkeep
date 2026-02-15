@@ -1,0 +1,5 @@
+# Output Directory
+
+Generated audio files are saved here by default.
+
+This directory is excluded from git (see .gitignore).
