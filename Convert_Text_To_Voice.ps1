@@ -155,7 +155,10 @@ function Convert-TextToSpeech {
                 temperature = 0.5
                 speed = 1.0
                 enable_text_splitting = $true
-            } | ConvertTo-Json -Depth 10
+            } | ConvertTo-Json -Depth 10 -Compress
+            
+            # Ensure UTF-8 encoding
+            $bodyBytes = [System.Text.Encoding]::UTF8.GetBytes($body)
             
             $retryCount = 0
             $maxRetries = 2
@@ -165,8 +168,8 @@ function Convert-TextToSpeech {
                 try {
                     $audioBase64 = Invoke-RestMethod -Uri "http://localhost:8000/tts" `
                         -Method POST `
-                        -ContentType "application/json" `
-                        -Body $body `
+                        -ContentType "application/json; charset=utf-8" `
+                        -Body $bodyBytes `
                         -TimeoutSec 120
                     
                     $chunkFile = Join-Path $tempDir "chunk_$('{0:D4}' -f $chunkNum).wav"
@@ -224,11 +227,32 @@ function Convert-TextToSpeech {
                 if ($combinedBytes.Count -eq 0) {
                     $combinedBytes.AddRange($chunkBytes)
                 } else {
-                    $combinedBytes.AddRange($chunkBytes[44..($chunkBytes.Length - 1)])
+                    $bytesToAdd = [byte[]]$chunkBytes[44..($chunkBytes.Length - 1)]
+                    $combinedBytes.AddRange($bytesToAdd)
                 }
             }
             
-            [System.IO.File]::WriteAllBytes($OutputFile, $combinedBytes.ToArray())
+            # Convert to array and fix WAV header
+            $finalBytes = $combinedBytes.ToArray()
+            
+            # Update RIFF chunk size (bytes 4-7): file size minus 8
+            $riffSize = $finalBytes.Length - 8
+            $riffSizeBytes = [BitConverter]::GetBytes([uint32]$riffSize)
+            [Array]::Copy($riffSizeBytes, 0, $finalBytes, 4, 4)
+            
+            # Find and update data chunk size (search for 'data' chunk)
+            for ($i = 36; $i -lt [Math]::Min(200, $finalBytes.Length - 8); $i++) {
+                if ($finalBytes[$i] -eq 0x64 -and $finalBytes[$i+1] -eq 0x61 -and 
+                    $finalBytes[$i+2] -eq 0x74 -and $finalBytes[$i+3] -eq 0x61) {
+                    # Found 'data' chunk, update size at offset +4
+                    $dataSize = $finalBytes.Length - $i - 8
+                    $dataSizeBytes = [BitConverter]::GetBytes([uint32]$dataSize)
+                    [Array]::Copy($dataSizeBytes, 0, $finalBytes, $i + 4, 4)
+                    break
+                }
+            }
+            
+            [System.IO.File]::WriteAllBytes($OutputFile, $finalBytes)
         }
         
         # Cleanup
@@ -489,7 +513,7 @@ $form.Controls.Add($convertButton)
 $privacyLabel = New-Object System.Windows.Forms.Label
 $privacyLabel.Location = New-Object System.Drawing.Point(20, 465)
 $privacyLabel.Size = New-Object System.Drawing.Size(560, 20)
-$privacyLabel.Text = "🔒 100% Local Processing - Your text never leaves this machine"
+$privacyLabel.Text = "[SECURE] 100% Local Processing - Your text never leaves this machine"
 $privacyLabel.ForeColor = [System.Drawing.Color]::Green
 $privacyLabel.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Italic)
 $form.Controls.Add($privacyLabel)
